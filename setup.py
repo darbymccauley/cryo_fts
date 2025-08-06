@@ -12,7 +12,7 @@ setup(
         'numpy',
         'astropy',
         'pyserial',
-        'zaber_motion'
+        'zaber-motion'
     ],
     python_requires='>=3.7',
 )
