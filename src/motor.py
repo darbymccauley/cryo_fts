@@ -31,7 +31,7 @@ class MotorController:
         if not self.device:
             raise RuntimeError('No motor device connected.')
         self.axis = self.device.get_axis(1)
-        self.axis_min, self.axis_max = self.axis.settings.get('limit.min', self.LENGTH_UNITS), self.axis.settings.get('limit.max', self.LENGTH_UNITS)
+        self.AXIS_MIN, self.AXIS_MAX = self.axis.settings.get('limit.min', self.LENGTH_UNITS), self.axis.settings.get('limit.max', self.LENGTH_UNITS)
         self.is_homed = self.axis.is_homed()
         if not self.is_homed:
             self.home_axis()
@@ -73,7 +73,7 @@ class MotorController:
 
     def scan_track(self, velocity=0.0, velocity_unit=None):
         self._check_axis_status()
-        self.move_absolute(self.axis_min)
+        self.move_absolute(self.AXIS_MIN)
         unit = velocity_unit or self.VELOCITY_UNITS
         self.axis.move_velocity(velocity, unit)
 
