@@ -34,11 +34,10 @@ class EncoderController:
         
     def init(self):
         cmds = [
-            'B26/r', # set bit-length to 26
+            'B26/r' # set bit-length to 26
         ]
         for cmd in cmds:
-            self.write(cmd)
-        self.connection.reset_input_buffer()
+            self.write(cmd, read=False)
         return True
 
     def close(self):
@@ -49,7 +48,8 @@ class EncoderController:
         return True
     
     def write(self, cmd, encode_to='ascii', read=False, decode_to='utf-8', timeout=2.0):
-        self.connection.reset_input_buffer()
+        while self.connection.in_waiting:
+            self.connection.read(self.connection.in_waiting)
         self.connection.write(cmd.encode(encode_to))
         if read:
             return self.read(decode_to, timeout)
