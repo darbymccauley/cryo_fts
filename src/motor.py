@@ -10,10 +10,10 @@ class MotorController:
         self.axis = None
         self.is_homed = False
 
-        ports = [os.path.join('/dev', port) for port in os.listdir('/dev/') if port.startswith('tty.')]
+        ports = [os.path.join('/dev', p) for p in os.listdir('/dev/') if p.startswith('tty.')]
         for port in ports:
             try:
-                conn = Connection.open_serial_port(port)
+                conn = Connection.open_serial_port(port, direct=True)
                 dev_list = conn.detect_devices()
                 if not dev_list:
                     conn.close()
@@ -35,7 +35,6 @@ class MotorController:
         self.is_homed = self.axis.is_homed()
         if not self.is_homed:
             self.home_axis()
-        return True
 
     def close(self):
         if self.port:
@@ -66,7 +65,8 @@ class MotorController:
 
     def get_position(self, length_unit=None):
         """
-        Not to be used for accuracy over encoder."""
+        Not to be used for accuracy over encoder.
+        """
         self._check_axis_status()
         unit = length_unit or self.LENGTH_UNITS
         return self.axis.get_position(unit)
