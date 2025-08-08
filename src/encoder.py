@@ -1,6 +1,7 @@
 import os
 import serial
 import time
+import threading
 
 class EncoderController:
     def __init__(self, baudrate=9600, timeout=0.1):
@@ -8,83 +9,116 @@ class EncoderController:
         self.device = None
         self.connection = None
         self.transmitting = False
+        self.current_position = None
+        self._reading_thread = None
+        self._stop_thread = threading.Event()
 
-        ports = [os.path.join('/dev', port) for port in os.listdir('/dev/') if port.startswith('tty.')]
+        # Try to connect to the encoder
+        ports = [os.path.join('/dev', p) for p in os.listdir('/dev/') if p.startswith('tty.')]
         for port in ports:
             try:
-                conn = serial.Serial(port, baudrate=baudrate, timeout=timeout, rtscts=True)
-                conn.write(b'v')
-                response = conn.readall()
+                conn = serial.Serial(port, baudrate=baudrate, timeout=timeout)
                 try:
-                    device = response.decode('utf-8').strip()
-                except UnicodeDecodeError:
-                    continue
-                if not device:
+                    conn.write(b'v')
+                    rsp = conn.readall().decode('utf-8', errors='ignore').strip()
+                    if rsp:
+                        self.device = rsp
+                        self.port = port
+                        self.connection = conn
+                        print(f'Established connection to {self.device} on {self.port}')
+                        break
+                    else:
+                        conn.close()
+                except Exception:
                     conn.close()
-                    continue
-                self.device = device
-                self.port = port
-                self.connection = conn
-                print(f'Established connection to {self.device} on {self.port}')
-                break
-            except Exception as e:
+            except serial.SerialException:
                 continue
         if not self.device:
             raise RuntimeError('Cannot connect to encoder.')
-        
+
     def init(self):
-        cmds = [
-            'B26/r' # set bit-length to 26
-        ]
+        """Initialize the encoder."""
+        cmds = ['B26\r']
         for cmd in cmds:
-            self.write(cmd, read=False)
-        return True
+            self.write(cmd, read=True)
 
     def close(self):
+        """Stop transmission and close connection."""
         if self.transmitting:
             self.stop_transmission()
         if self.connection and self.connection.is_open:
             self.connection.close()
-        return True
-    
-    def write(self, cmd, encode_to='ascii', read=False, decode_to='utf-8', timeout=2.0):
+        print('Connection closed.')
+
+    def _clear_buffer(self):
+        """Empty any pending bytes from the buffer."""
         while self.connection.in_waiting:
             self.connection.read(self.connection.in_waiting)
-        self.connection.write(cmd.encode(encode_to))
-        if read:
-            return self.read(decode_to, timeout)
+            time.sleep(0.01)
 
-    def read(self, decode_to='utf-8', timeout=2.0):
+    def write(self, cmd, read=False, timeout=2.0):
+        """Send a command to the encoder."""
+        if isinstance(cmd, str):
+            cmd = cmd.encode('ascii')
+        self._clear_buffer()
+        self.connection.write(cmd)
+        if read:
+            return self.read(timeout=timeout)
+
+    def read(self, timeout=2.0):
+        """Read from the encoder."""
         if self.transmitting:
-            raise ValueError('Cannot read while actively transmitting. Turn off continuous transmission first.')
-        t0 = time.time()
-        while True:
-            rsp = self.connection.readall().strip()
-            if rsp:
-                try:
-                    return rsp.decode(decode_to)
-                except UnicodeDecodeError as e:
-                    raise RuntimeError(f'Failed to decode response: {rsp} ({e})')
-            if time.time() - t0 > timeout:
-                raise TimeoutError('No response received from the encoder.')
-    
-    def get_count(self):
-        if self.transmitting:
-            rsp = self.connection.read(9)
-        else:
-            rsp = self.write('?', read=True)
-        return int(rsp)
-    
+            raise RuntimeError('Stop transmission before reading.')
+        self.connection.timeout = timeout
+        resp = self.connection.readline()
+        if not resp:
+            raise TimeoutError('No response from encoder.')
+        return resp.decode('utf-8', errors='ignore').strip()
+
     def start_transmission(self):
+        """Enable continuous transmission and start background reader."""
         if self.transmitting:
-            return True
-        self.write('1')
+            return
+        self.write('1')  # Start continuous transmission
         self.transmitting = True
-        return True
-    
+        self._stop_thread.clear()
+        self._reading_thread = threading.Thread(target=self._read_loop, daemon=True)
+        self._reading_thread.start()
+        print('Continuous transmission started.')
+
     def stop_transmission(self):
+        """Disable continuous transmission and stop background reader."""
         if not self.transmitting:
-            return True
+            return
         self.write('0')
+        time.sleep(0.05)
+        self._stop_thread.set()
+        if self._reading_thread:
+            self._reading_thread.join(timeout=1.0)
         self.transmitting = False
-        return True
+        self._clear_buffer()
+        print('Continuous transmission stopped.')
+
+    def _read_loop(self):
+        dat_len = 9
+        while not self._stop_thread.is_set():
+            try:
+                data = self.connection.read(dat_len)
+                if len(data) == dat_len:
+                    try:
+                        self.current_position = int(data.decode('ascii'))
+                    except ValueError:
+                        continue
+            except Exception as e:
+                print(f'Read loop error: {e}')
+            
+    def get_count(self):
+        """Get the current count in either mode."""
+        if self.transmitting:
+            return self.current_position
+        else:
+            resp = self.write('?', read=True)
+            try:
+                return int(resp)
+            except ValueError:
+                raise RuntimeError(f'Invalid response: {resp}')
