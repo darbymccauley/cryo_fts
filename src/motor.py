@@ -1,5 +1,6 @@
 import os
 from zaber_motion.ascii import Connection
+import astropy.units as u
 
 class MotorController:
     def __init__(self, length_units='mm', velocity_units='mm/s'):
@@ -32,6 +33,7 @@ class MotorController:
             raise RuntimeError('No motor device connected.')
         self.axis = self.device.get_axis(1)
         self.AXIS_MIN, self.AXIS_MAX = self.axis.settings.get('limit.min', self.LENGTH_UNITS), self.axis.settings.get('limit.max', self.LENGTH_UNITS)
+        self.MAXSPEED = self.device.settings.get('maxspeed', self.VELOCITY_UNITS)
         self.is_homed = self.axis.is_homed()
         if not self.is_homed:
             self.home_axis()
@@ -64,9 +66,7 @@ class MotorController:
             raise RuntimeError('Axis not initialized.')
 
     def get_position(self, length_unit=None):
-        """
-        Not to be used for accuracy over encoder.
-        """
+        """Not to be used for accuracy over encoder readings."""
         self._check_axis_status()
         unit = length_unit or self.LENGTH_UNITS
         return self.axis.get_position(unit)
@@ -80,9 +80,9 @@ class MotorController:
     def move_velocity(self, velocity=0.0, velocity_unit=None):
         self._check_axis_status()
         unit = velocity_unit or self.VELOCITY_UNITS
+        assert velocity * u.Unit(unit) < (self.MAXSPEED * u.Unit(self.VELOCITY_UNITS)).to(unit), 'Velocity requested larger than motor maxspeed.'
         self.axis.move_velocity(velocity, unit)
 
     def stop(self):
         self._check_axis_status()
         self.axis.stop()
-    
