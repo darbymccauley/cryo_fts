@@ -2,6 +2,7 @@ import os
 import serial
 import time
 import threading
+import queue
 
 class EncoderController:
     def __init__(self, baudrate=9600, timeout=0.1):
@@ -10,28 +11,25 @@ class EncoderController:
         self.connection = None
         self.transmitting = False
         self.current_position = None
+        self.data_queue = queue.Queue()
         self._reading_thread = None
         self._stop_thread = threading.Event()
 
-        # Try to connect to the encoder
         ports = [os.path.join('/dev', p) for p in os.listdir('/dev/') if p.startswith('tty.')]
         for port in ports:
             try:
                 conn = serial.Serial(port, baudrate=baudrate, timeout=timeout)
-                try:
-                    conn.write(b'v')
-                    rsp = conn.readall().decode('utf-8', errors='ignore').strip()
-                    if rsp:
-                        self.device = rsp
-                        self.port = port
-                        self.connection = conn
-                        print(f'Established connection to {self.device} on {self.port}')
-                        break
-                    else:
-                        conn.close()
-                except Exception:
+                conn.write(b'v')
+                rsp = conn.readall().decode('utf-8', errors='ignore').strip()
+                if rsp:
+                    self.device = rsp
+                    self.port = port
+                    self.connection = conn
+                    print(f'Established connection to {self.device} on {self.port}')
+                    break
+                else:
                     conn.close()
-            except serial.SerialException:
+            except Exception:
                 continue
         if not self.device:
             raise RuntimeError('Cannot connect to encoder.')
@@ -48,7 +46,7 @@ class EncoderController:
             self.stop_transmission()
         if self.connection and self.connection.is_open:
             self.connection.close()
-        print('Connection closed.')
+        print('Encoder connection closed.')
 
     def _clear_buffer(self):
         """Empty any pending bytes from the buffer."""
@@ -70,10 +68,10 @@ class EncoderController:
         if self.transmitting:
             raise RuntimeError('Stop transmission before reading.')
         self.connection.timeout = timeout
-        resp = self.connection.readline()
-        if not resp:
+        rsp = self.connection.readline()
+        if not rsp:
             raise TimeoutError('No response from encoder.')
-        return resp.decode('utf-8', errors='ignore').strip()
+        return rsp.decode('utf-8', errors='ignore').strip()
 
     def start_transmission(self):
         """Enable continuous transmission and start background reader."""
@@ -106,7 +104,9 @@ class EncoderController:
                 data = self.connection.read(dat_len)
                 if len(data) == dat_len:
                     try:
-                        self.current_position = int(data.decode('ascii'))
+                        pos = int(data.decode('ascii'))
+                        self.current_position = pos
+                        self.data_queue.put((time.time(), pos)) # store position with timestamp
                     except ValueError:
                         continue
             except Exception as e:
@@ -117,8 +117,17 @@ class EncoderController:
         if self.transmitting:
             return self.current_position
         else:
-            resp = self.write('?', read=True)
+            rsp = self.write('?', read=True)
             try:
-                return int(resp)
+                return int(rsp)
             except ValueError:
-                raise RuntimeError(f'Invalid response: {resp}')
+                raise RuntimeError(f'Invalid response: {rsp}')
+            
+    def get_latest(self):
+        """Get the latest (timestamp, position) from the queue."""
+        try:
+            while True:
+                ts, pos = self.data_queue.get_nowait()
+        except queue.Empty:
+            pass
+        return (ts, pos) if 'ts' in locals() else None
