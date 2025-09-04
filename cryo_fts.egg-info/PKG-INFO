@@ -1,0 +1,16 @@
+Metadata-Version: 2.4
+Name: cryo_fts
+Version: 0.0.1
+Summary: Cryogenic Fourier Transform Spectrometer utilities
+Author: Darby McCauley
+Author-email: darbynm2@illinois.edu
+Requires-Python: >=3.7
+Requires-Dist: numpy
+Requires-Dist: astropy
+Requires-Dist: pyserial
+Requires-Dist: zaber-motion
+Dynamic: author
+Dynamic: author-email
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
