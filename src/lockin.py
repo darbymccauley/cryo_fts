@@ -47,16 +47,45 @@ class LockinController:
         if not self.connection:
             raise RuntimeError('Cannot connect to lockin.')
         
-        def write(self, cmd):
-            """Send a command to the lockin."""
-            if not cmd.startswith('++'):
-                cmd = '++' + cmd
-            self.connection.write((cmd + '\r\n').encode('ascii'))
-            time.sleep(0.05)
-
         self.write(f'++addr {self.gpib_address}')
         self.write('++auto 1')
         self.write('eos 3')
         self.write('++eoi 1')
         self.write('++mode 1')
         self.write('OUTX 1')
+        
+    def init(self):
+        """Initialize the lock-in amplifier."""
+        print("Lock-in ID:", self.write('*IDN?', read=True))
+        self.write('*CLS')
+
+    def close(self):
+        """Close connection."""
+        if self.transmitting:
+            self.stop_transmission()
+        if self.connection and self.connection.is_open:
+            self.connection.close()
+        print('Lock-in connection closed.')
+
+    def _clear_buffer(self):
+        """Clear buffer."""
+        while self.connection.in_waiting:
+            self.connection.read(self.connection.in_waiting)
+            time.sleep(0.01)
+
+    def write(self, cmd, read=False, timeout=2.0):
+        """Send a command to the lock-in."""
+        if isinstance(cmd, str):
+            cmd = cmd.encode('ascii')
+        self._clear_buffer()
+        self.connection.write(cmd + b'\r\n')
+        if read:
+            return self.read(timeout=timeout)
+
+    def read(self, timeout=2.0):
+        """Read from the lockin."""
+        self.connection.timeout = timeout
+        rsp = self.connection.readline()
+        if not rsp:
+            raise TimeoutError('No response from lockin.')
+        return rsp.decode('utf-8', errors='ignore').strip()
