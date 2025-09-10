@@ -89,3 +89,36 @@ class LockinController:
         if not rsp:
             raise TimeoutError('No response from lockin.')
         return rsp.decode('utf-8', errors='ignore').strip()
+    
+    def get_x_y_r_theta(self):
+        """x, y, and r in V. theta in degrees."""
+        xyrtheta = self.write('SNAPD?', read = True)
+        x, y, r, theta = xyrtheta.split(',')
+        return float(x), float (y), float(r), float(theta)
+    
+    def get_freq(self):
+        """freq in Hz"""
+        freq = self.write('FREQ?', read=True)
+        return float(freq)
+    
+    def set_freq(self, freq): #for some reason, ths doesn't seem to work- not sure why
+        """freq in Hz"""
+        freq = self.write(f'FREQ {freq}')
+
+    def get_amp(self):
+        """amp in V"""
+        amp = self.write('SLVL?', read = True)
+        return float(amp)
+    
+    def set_amp(self, amp):
+        """amp in V"""
+        amp = self.write(f'SLVL {amp}')
+
+    def get_timeconstant(self):
+        """time constant setting as defined in manual"""
+        tc = self.write('OFLT?', read =True)
+        return float(tc)
+    
+    def set_timeconstant(self, tc):
+        """time constant setting as defined in manual"""
+        tc = self.write(f'OFLT {tc}')
