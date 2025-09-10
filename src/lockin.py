@@ -103,7 +103,7 @@ class LockinController:
     
     def set_freq(self, freq): #for some reason, ths doesn't seem to work- not sure why
         """freq in Hz"""
-        freq = self.write(f'FREQ {freq}')
+        self.write(f'FREQ {freq}')
 
     def get_amp(self):
         """amp in V"""
@@ -112,7 +112,7 @@ class LockinController:
     
     def set_amp(self, amp):
         """amp in V"""
-        amp = self.write(f'SLVL {amp}')
+        self.write(f'SLVL {amp}')
 
     def get_timeconstant(self):
         """time constant setting as defined in manual"""
@@ -121,4 +121,78 @@ class LockinController:
     
     def set_timeconstant(self, tc):
         """time constant setting as defined in manual"""
-        tc = self.write(f'OFLT {tc}')
+        self.write(f'OFLT {tc}')
+
+    def get_sens(self):
+        """sensitivity setting as defined in the manual"""
+        sens = self.write('SCAL?', read = True)
+        return float(sens)
+    
+    def set_sens(self, sens):
+        """sensitivity setting as defined in the manual"""
+        self.write(f'SCAL {sens}')
+
+    def start_transmission(self, sample_rate = 10):
+        """
+        Enable continuous transmission and start background reader.
+        """
+        if self.transmitting:
+            return
+        self.transmitting = True
+        self._stop_thread.clear()
+        self._reading_thread = threading.Thread(target=self._read_loop, args=(sample_rate,), daemon=True)
+        self._reading_thread.start()
+        print('Continuous transmission started.')
+
+    def stop_transmission(self):
+        """
+        Disable continuous transmission and stop background reader.
+        """
+        if not self.transmitting:
+            return
+        self._stop_thread.set()
+        if self._reading_thread:
+            self._reading_thread.join(timeout=1.0)
+        self.transmitting = False
+        self._clear_buffer()
+        print('Continuous transmission stopped.') 
+
+    def _read_loop(self, sample_rate):
+        """
+        Background reader for lockin data.
+        """
+        period = 1.0/sample_rate
+        while not self._stop_thread.is_set():
+            try:
+                #get x, y, r, and theta data
+                data = self.get_x_y_r_theta()
+                if len(data) == 4:
+                    x, y, r, theta = map(float, data)
+                    timestamp = time.time()
+                    self.data_queue.put({'timestamp': timestamp,
+                        'x': x,
+                        'y': y,
+                        'r': r,
+                        'theta': theta})
+                time.sleep(period)
+            except Exception as e:
+                print(f'Read loop error: {e}') 
+    
+    def get_latest(self):
+        """Get the latest (x, y, r, theta) from the queue."""
+        latest = None
+        try:
+            while True:
+                latest = self.data_queue.get_nowait()
+        except queue.Empty:
+            pass
+        return latest
+
+    def get_all(self):
+        data = []
+        try:
+            while True:
+                data.append(self.data_queue.get_nowait())
+        except queue.Empty:
+            pass
+        return data
