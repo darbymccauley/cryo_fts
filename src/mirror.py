@@ -1,4 +1,4 @@
-from . import encoder, motor
+import encoder, motor, lockin
 import astropy.units as u
 import threading
 import time 
@@ -9,6 +9,7 @@ class MirrorController:
     def __init__(self):
         self.encoder = encoder.EncoderController()
         self.motor = motor.MotorController()
+        self.lockin = lockin.LockinController()
         self.RESOLUTION = RES.to(self.motor.LENGTH_UNITS)
         self.OFFSET = None
         self._scan_thread = None
@@ -17,6 +18,7 @@ class MirrorController:
     def init(self):
         self.encoder.init()
         self.motor.init()
+        self.lockin.init()
         self.find_offset()
         # self.encoder.start_transmission()
         return True
@@ -34,6 +36,7 @@ class MirrorController:
     def close(self):
         self.encoder.close()
         self.motor.close()
+        self.lockin.close()
 
     def move_absolute(self, position, length_unit=None, async_move=False):
         if async_move:
@@ -49,27 +52,48 @@ class MirrorController:
         else:
             self.motor.move_relative(position, length_unit)
 
-    def scan_and_collect(self, velocity, data_callback, velocity_unit=None):
+    def scan_and_collect(self, velocity, data_callback, velocity_unit=None, sample_rate = 10):
         if self._scan_thread and self._scan_thread.is_alive():
             raise RuntimeError('Scan already in progress.')
         self._stop_scan.clear()
-        self._scan_thread = threading.Thread(target=self._scan_worker, args=(velocity, data_callback, velocity_unit), daemon=True)
+        self._scan_thread = threading.Thread(target=self._scan_worker, args=(velocity, data_callback, velocity_unit, sample_rate), daemon=True)
         self._scan_thread.start()
 
     def stop_scan(self):
         self._stop_scan.set()
 
-    def _scan_worker(self, velocity, data_callback, velocity_unit):
-        # Gonna need some reworking because I will need to include lockin somewhere in here
+    def _scan_worker(self, velocity, data_callback, velocity_unit, sample_rate):
+        # adding lockin functionality
         try:
             self.encoder.start_transmission()
             self.motor.move_velocity(velocity, velocity_unit)
+            period = 1/sample_rate
+
             while not self._stop_scan.is_set():
-                latest = self.encoder.get_latest()
-                if latest:
-                    ts, cnt = latest
-                    # pos = (cnt - self.OFFSET) * self.RESOLUTION
-                    data_callback(ts, cnt)
+                ts = time.time()
+                #encoder latest
+                enc_latest = self.encoder.get_latest()
+                if enc_latest:
+                    _, cnt = enc_latest
+                    pos = (cnt - self.OFFSET) * self.RESOLUTION
+                else:
+                    pos = None
+
+                #lockin
+                try:
+                    x, y, r, theta = self.lockin.get_x_y_r_theta()
+                except Exception as e:
+                    print(f"lockin read error: {e}")
+                    x = y = r = theta = None
+                    data_callback({
+                    'timestamp': ts,
+                    'position': pos,
+                    'x': x,
+                    'y': y,
+                    'r': r,
+                    'theta': theta})
+                time.sleep(period)
+ 
         finally:
             self.motor.stop()
             self.encoder.stop_transmission()

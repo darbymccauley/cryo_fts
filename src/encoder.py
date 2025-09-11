@@ -23,7 +23,7 @@ class EncoderController:
         self._stop_thread = threading.Event()
         self.POS_LEN = 9 # bit-length of position data
 
-        ports = [os.path.join('/dev', p) for p in os.listdir('/dev/') if p.startswith('tty.')]
+        ports = [p.device for p in serial.tools.list_ports.comports()]
         for port in ports:
             try:
                 conn = serial.Serial(port, baudrate=baudrate, timeout=timeout)
