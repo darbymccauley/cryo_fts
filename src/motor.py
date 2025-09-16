@@ -1,6 +1,8 @@
 import os
 from zaber_motion.ascii import Connection
 import astropy.units as u
+import serial
+
 
 class MotorController:
     def __init__(self, length_units='mm', velocity_units='mm/s'):
@@ -18,7 +20,7 @@ class MotorController:
         self.axis = None
         self.is_homed = False
 
-        ports = [os.path.join('/dev', p) for p in os.listdir('/dev/') if p.startswith('tty.')]
+        ports = [p.device for p in serial.tools.list_ports.comports()]
         for port in ports:
             try:
                 conn = Connection.open_serial_port(port, direct=True)

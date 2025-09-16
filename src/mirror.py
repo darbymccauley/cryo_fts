@@ -9,7 +9,7 @@ class MirrorController:
     def __init__(self):
         self.encoder = encoder.EncoderController()
         self.motor = motor.MotorController()
-        self.lockin = lockin.LockinController()
+        self.lockin = lockin.LockinController(gpib_address=8)
         self.RESOLUTION = RES.to(self.motor.LENGTH_UNITS)
         self.OFFSET = None
         self._scan_thread = None
@@ -34,6 +34,7 @@ class MirrorController:
         return pos
     
     def close(self):
+        self.stop_scan()
         self.encoder.close()
         self.motor.close()
         self.lockin.close()
@@ -61,6 +62,8 @@ class MirrorController:
 
     def stop_scan(self):
         self._stop_scan.set()
+        if self._scan_thread and self._scan_thread.is_alive():
+            self._scan_thread.join()
 
     def _scan_worker(self, velocity, data_callback, velocity_unit, sample_rate):
         # adding lockin functionality
@@ -69,29 +72,28 @@ class MirrorController:
             self.motor.move_velocity(velocity, velocity_unit)
             period = 1/sample_rate
 
+            self.data_store = []
+
             while not self._stop_scan.is_set():
                 ts = time.time()
                 #encoder latest
                 enc_latest = self.encoder.get_latest()
+                pos = None
                 if enc_latest:
                     _, cnt = enc_latest
                     pos = (cnt - self.OFFSET) * self.RESOLUTION
-                else:
-                    pos = None
 
                 #lockin
-                try:
-                    x, y, r, theta = self.lockin.get_x_y_r_theta()
-                except Exception as e:
-                    print(f"lockin read error: {e}")
-                    x = y = r = theta = None
-                    data_callback({
+                x, y, r, theta = self.lockin.get_x_y_r_theta()
+                record = ({
                     'timestamp': ts,
                     'position': pos,
                     'x': x,
                     'y': y,
                     'r': r,
                     'theta': theta})
+                self.data_store.append(record)
+                data_callback(record)
                 time.sleep(period)
  
         finally:
