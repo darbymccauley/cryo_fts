@@ -47,17 +47,17 @@ class LockinController:
         if not self.connection:
             raise RuntimeError('Cannot connect to lockin.')
         
+    def init(self):
+        """Initialize the lock-in amplifier."""
         self.write(f'++addr {self.gpib_address}')
         self.write('++auto 1')
         self.write('eos 3')
         self.write('++eoi 1')
         self.write('++mode 1')
         self.write('OUTX 1')
-        
-    def init(self):
-        """Initialize the lock-in amplifier."""
         print("Lock-in ID:", self.write('*IDN?', read=True))
         self.write('*CLS')
+        self.write('RSRC EXT')
 
     def close(self):
         """Close connection."""
