@@ -165,18 +165,26 @@ class LockinController:
         while not self._stop_thread.is_set():
             try:
                 #get x, y, r, and theta data
-                data = self.get_x_y_r_theta()
-                if len(data) == 4:
-                    x, y, r, theta = map(float, data)
-                    timestamp = time.time()
-                    self.data_queue.put({'timestamp': timestamp,
-                        'x': x,
-                        'y': y,
-                        'r': r,
-                        'theta': theta})
+                x, y, r, theta = self.get_x_y_r_theta()
+                timestamp = time.time()
+                self.data_queue.put({
+                    'timestamp': timestamp,
+                    'x': x,
+                    'y': y,
+                    'r': r,
+                    'theta': theta})
                 time.sleep(period)
             except Exception as e:
                 print(f'Read loop error: {e}') 
+    
+    def get_closest_time(self, target_time):
+        """get the lock-in reading closest to target time"""
+        all_data = self.get_all()
+        if not all_data:
+            return None
+        else:
+            closest = min(all_data, key= lambda d: abs(d['timestamp'] - target_time))
+            return closest
     
     def get_latest(self):
         """Get the latest (x, y, r, theta) from the queue."""

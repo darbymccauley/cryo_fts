@@ -20,9 +20,9 @@ class MirrorController:
         self._save_filename = None
 
     def init(self):
+        self.lockin.init()
         self.encoder.init()
         self.motor.init()
-        self.lockin.init()
         self.find_offset()
         # self.encoder.start_transmission()
         return True
@@ -88,10 +88,16 @@ class MirrorController:
         try:
             self.encoder.start_transmission()
             self.motor.move_velocity(velocity, velocity_unit)
-            period = 1/sample_rate
+            # lock-in reads in background at higher rate than scan, at least 20 Hz
+            lockin_rate = max(sample_rate * 2, 20)
+            self.lockin.start_transmission(sample_rate=lockin_rate)
+            period = 1 / sample_rate
+
+            with open(self._save_filename, 'w') as f:
+                f.write("timestamp,position_mm,x,y,r,theta\n")
 
             while not self._stop_scan.is_set():
-                ts = time.time()
+                t_enc = time.time()
                 #encoder latest
                 enc_latest = self.encoder.get_latest()
                 pos = None
@@ -101,20 +107,32 @@ class MirrorController:
                     pos = pos.value
 
                 #lockin
-                x, y, r, theta = self.lockin.get_x_y_r_theta()
+                lockin_data = self.lockin.get_closest_time(t_enc)
+                
+                if lockin_data:
+                    x = lockin_data['x']
+                    y = lockin_data['y']
+                    r = lockin_data['r']
+                    theta = lockin_data['theta']
+                else:
+                    x = y = r = theta = None
+
                 record = ({
-                    'timestamp': ts,
+                    'timestamp': t_enc,
                     'position_mm': pos,
                     'x': x,
                     'y': y,
                     'r': r,
                     'theta': theta})
                 self.data_store.append(record)
+                with open(self._save_filename, "a") as f:
+                    f.write(f"{t_enc},{pos},{x},{y},{r},{theta}\n")
                 time.sleep(period)
  
         finally:
             self.motor.stop()
             self.encoder.stop_transmission()
+            self.lockin.stop_transmission()
 
 
     
