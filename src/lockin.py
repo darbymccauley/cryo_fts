@@ -58,6 +58,8 @@ class LockinController:
         print("Lock-in ID:", self.write('*IDN?', read=True))
         self.write('*CLS')
         self.write('RSRC EXT')
+        self.data_buffer = []
+        self.buffer_lock = threading.Lock()
 
     def close(self):
         """Close connection."""
@@ -173,6 +175,17 @@ class LockinController:
                     'y': y,
                     'r': r,
                     'theta': theta})
+                with self.buffer_lock:
+                    self.data_buffer.append({
+                        'timestamp': timestamp,
+                        'x': x,
+                        'y': y,
+                        'r': r,
+                        'theta': theta
+                    })
+                    if len(self.data_buffer) > 1000:
+                        self.data_buffer.pop(0)
+                        
                 time.sleep(period)
             except Exception as e:
                 print(f'Read loop error: {e}') 
@@ -197,10 +210,5 @@ class LockinController:
         return latest
 
     def get_all(self):
-        data = []
-        try:
-            while True:
-                data.append(self.data_queue.get_nowait())
-        except queue.Empty:
-            pass
-        return data
+        with self.buffer_lock:
+            return list(self.data_buffer)

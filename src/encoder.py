@@ -51,6 +51,8 @@ class EncoderController:
             ]
         for cmd in cmds:
             self.write(cmd, read=True)
+        self.data_buffer = []
+        self.buffer_lock = threading.Lock()
 
     def close(self):
         """
@@ -140,8 +142,13 @@ class EncoderController:
                 if len(data) == dat_len:
                     try:
                         pos = int(data.decode('ascii'))
+                        t = time.time()
                         self.current_position = pos
-                        self.data_queue.put((time.time(), pos)) # store position with timestamp
+                        with self.buffer_lock:
+                            self.data_buffer.append((t, pos))
+                            if len(self.data_buffer) > 1000:
+                                self.data_buffer.pop(0)
+                        self.data_queue.put((t, pos)) # store position with timestamp
                     except ValueError:
                         continue
             except Exception as e:
@@ -170,3 +177,7 @@ class EncoderController:
         except queue.Empty:
             pass
         return (ts, pos) if 'ts' in locals() else None
+
+    def get_all(self):
+        with self.buffer_lock:
+            return list(self.data_buffer)

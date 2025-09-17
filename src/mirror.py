@@ -89,45 +89,45 @@ class MirrorController:
             self.encoder.start_transmission()
             self.motor.move_velocity(velocity, velocity_unit)
             # lock-in reads in background at higher rate than scan, at least 20 Hz
-            lockin_rate = max(sample_rate * 2, 20)
+            lockin_rate = max(int(sample_rate * 2), 20)
             self.lockin.start_transmission(sample_rate=lockin_rate)
             period = 1 / sample_rate
 
             with open(self._save_filename, 'w') as f:
                 f.write("timestamp,position_mm,x,y,r,theta\n")
 
-            while not self._stop_scan.is_set():
-                t_enc = time.time()
-                #encoder latest
-                enc_latest = self.encoder.get_latest()
-                pos = None
-                if enc_latest:
-                    _, cnt = enc_latest
-                    pos = (cnt - self.OFFSET) * self.RESOLUTION
-                    pos = pos.value
+                while not self._stop_scan.is_set():
+                    #encoder latest
+                    enc_latest = self.encoder.get_latest()
+                    t_enc = None
+                    pos = None
+                    if enc_latest:
+                        t_enc, cnt = enc_latest
+                        pos = (cnt - self.OFFSET) * self.RESOLUTION
+                        pos = pos.value
 
-                #lockin
-                lockin_data = self.lockin.get_closest_time(t_enc)
-                
-                if lockin_data:
-                    x = lockin_data['x']
-                    y = lockin_data['y']
-                    r = lockin_data['r']
-                    theta = lockin_data['theta']
-                else:
-                    x = y = r = theta = None
+                    #lockin
+                    lockin_data = self.lockin.get_closest_time(t_enc)
+                    
+                    if lockin_data:
+                        x = lockin_data['x']
+                        y = lockin_data['y']
+                        r = lockin_data['r']
+                        theta = lockin_data['theta']
+                    else:
+                        x = y = r = theta = None
 
-                record = ({
-                    'timestamp': t_enc,
-                    'position_mm': pos,
-                    'x': x,
-                    'y': y,
-                    'r': r,
-                    'theta': theta})
-                self.data_store.append(record)
-                with open(self._save_filename, "a") as f:
+                    record = ({
+                        'timestamp': t_enc,
+                        'position_mm': pos,
+                        'x': x,
+                        'y': y,
+                        'r': r,
+                        'theta': theta})
+                    self.data_store.append(record)
                     f.write(f"{t_enc},{pos},{x},{y},{r},{theta}\n")
-                time.sleep(period)
+                    f.flush()
+                    time.sleep(period)
  
         finally:
             self.motor.stop()
