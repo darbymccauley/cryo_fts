@@ -1,19 +1,19 @@
 from cryo_fts.motor import MotorController
-from cryo_fts.lockin import LockInController
+from cryo_fts.lockin import LockinController
 import numpy as np
 from datetime import date
 import time
 
 def main():
-    lockin = LockInController()
-    motor = MotorController(unit='mm')
+    lockin = LockinController()
+    motor = MotorController(length_units='mm')
 
     try:
         lockin.init()
         time.sleep(3)
         motor.init()
         time.sleep(1)
-        motor.home()
+        motor.home_axis()
 
         RES = 0.5  # [mm]
         NSTEPS = int(motor.AXIS_MAX / RES) + 1
@@ -27,14 +27,17 @@ def main():
             pos = n * RES
             try:
                 motor.move_absolute(pos)
-                current_pos = motor.get_pos()
+                time.sleep(0.1)  
+                
+                current_pos = motor.get_position()
                 positions.append(current_pos)
-                time.sleep(0.5)
-                # lockin.autogain()
-                d = lockin.record(N=NSAMPS)
-                data.append(d)
+                
+                d = [lockin.get_x_y_r_theta() for _ in range(NSAMPS)]  # Collect multiple samples
+                data.append(np.mean(np.array(d))) 
+                
                 print(f'Count: {n + 1}/{NSTEPS} | Position: {current_pos:.2f} mm')
-                time.sleep(0.5)
+                time.sleep(0.1) 
+
             except Exception as e:
                 print(f'FAILURE OCCURRED at step {n}: {e}')
                 continue
@@ -50,10 +53,9 @@ def main():
                 'Y_V': data[:, 1],
                 'R_V': data[:, 2],
                 'THETA_deg': data[:, 3],
-                # 'REF_FREQ_Hz': data[:, 4],
                 'MOTOR_POS_mm': positions,
             }
-            np.savez('data/gunn_diode_test_05.npz', **database)
+            np.savez('../data/trial-run-diode.npz', **database)
             print('Data saved.')
         else:
             print('No data collected.')
