@@ -1,4 +1,5 @@
-import encoder, motor, lockin
+# import encoder, motor, lockin
+from cryo_fts import encoder, motor, lockin
 import astropy.units as u
 import threading
 import time 
