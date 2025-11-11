@@ -1,5 +1,6 @@
 from cryo_fts.motor import MotorController
 from cryo_fts.lockin import LockinController
+from cryo_fts.encoder import EncoderController
 import numpy as np
 from datetime import date
 import time
@@ -7,11 +8,14 @@ import time
 def main():
     lockin = LockinController()
     motor = MotorController(length_units='mm')
+    encoder = EncoderController()
 
     try:
         lockin.init()
         time.sleep(3)
         motor.init()
+        time.sleep(1)
+        encoder.init()
         time.sleep(1)
         motor.home_axis()
 
@@ -29,7 +33,7 @@ def main():
                 motor.move_absolute(pos)
                 time.sleep(0.1)  
                 
-                current_pos = motor.get_position()
+                current_pos = encoder.get_count()
                 positions.append(current_pos)
                 
                 d = [lockin.get_x_y_r_theta() for _ in range(NSAMPS)]  # Collect multiple samples
@@ -55,7 +59,7 @@ def main():
                 'THETA_deg': data[:, 3],
                 'MOTOR_POS_mm': positions,
             }
-            np.savez('../data/trial-run-diode.npz', **database)
+            np.savez('../data/trial-run-encoder.npz', **database)
             print('Data saved.')
         else:
             print('No data collected.')
