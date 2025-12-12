@@ -4,22 +4,24 @@ from cryo_fts.encoder import EncoderController
 import numpy as np
 from datetime import date
 import time
+from datetime import datetime
+
 
 def main():
     lockin = LockinController()
-    motor = MotorController(length_units='mm')
     encoder = EncoderController()
+    motor = MotorController(length_units='mm')
 
     try:
         lockin.init()
         time.sleep(3)
-        motor.init()
-        time.sleep(1)
         encoder.init()
+        time.sleep(1)
+        motor.init()
         time.sleep(1)
         motor.home_axis()
 
-        RES = 0.5  # [mm]
+        RES = 0.15  # [mm]
         NSTEPS = int(motor.AXIS_MAX / RES) + 1
         print(f'Total steps in run: {NSTEPS}')
         NSAMPS = 50
@@ -36,8 +38,8 @@ def main():
                 current_pos = encoder.get_count()
                 positions.append(current_pos)
                 
-                d = [lockin.get_x_y_r_theta() for _ in range(NSAMPS)]  # Collect multiple samples
-                data.append(np.mean(np.array(d))) 
+                d = [lockin.get_x_y_r_theta() for _ in range(NSAMPS)]
+                data.extend(d)
                 
                 print(f'Count: {n + 1}/{NSTEPS} | Position: {current_pos:.2f} mm')
                 time.sleep(0.1) 
@@ -47,7 +49,7 @@ def main():
                 continue
 
         if data:
-            data = np.vstack(data)
+            data = np.array(data)
             database = {
                 'Date': date.today().strftime("%Y-%m-%d"),
                 'RES_mm': RES,
@@ -57,9 +59,10 @@ def main():
                 'Y_V': data[:, 1],
                 'R_V': data[:, 2],
                 'THETA_deg': data[:, 3],
-                'MOTOR_POS_mm': positions,
+                'ENCODER_POS_mm': positions,
             }
-            np.savez('../data/trial-run-encoder.npz', **database)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            np.savez(f'../scan_data/{timestamp}.npz', **database)
             print('Data saved.')
         else:
             print('No data collected.')
@@ -70,6 +73,7 @@ def main():
     finally:
         lockin.close()
         motor.close()
+        encoder.close()
         print('Devices closed.')
 
 if __name__ == "__main__":
