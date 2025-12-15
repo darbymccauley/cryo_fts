@@ -1,4 +1,4 @@
-build/lib/cryo_fts
+build/
 cryo_fts.egg-info/
 src/__pycache__/
 .vscode
