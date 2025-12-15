@@ -1,0 +1,5 @@
+build/lib/cryo_fts
+cryo_fts.egg-info/
+src/__pycache__/
+.vscode
+.DS_Store
