@@ -34,8 +34,14 @@ class Fresnel:
         amps = self.amplitude_coefficients()
         Rs = np.abs(amps['rs'])**2
         Rp = np.abs(amps['rp'])**2
-        Ts = (self.n2 * self.cos_t * np.abs(amps['ts'])**2) / (self.n1 * self.cos_i)
-        Tp = (self.n2 * self.cos_t * np.abs(amps['tp'])**2) / (self.n1 * self.cos_i)
+        Ts = (np.real(self.n2 * self.cos_t) / np.real(self.n1 * self.cos_i)) * np.abs(amps['ts'])**2
+        Tp = (np.real(self.n2 * self.cos_t) / np.real(self.n1 * self.cos_i)) * np.abs(amps['tp'])**2
+
+        # Ts = np.real((self.n2 * self.cos_t) / (self.n1 * self.cos_i)) * np.abs(amps['ts'])**2
+        # Ts = np.real((self.n2 * self.cos_t) / (self.n1 * self.cos_i)) * np.abs(amps['tp'])**2
+        
+        # Ts = (self.n2 * self.cos_t * np.abs(amps['ts'])**2) / (self.n1 * self.cos_i)
+        # Tp = (self.n2 * self.cos_t * np.abs(amps['tp'])**2) / (self.n1 * self.cos_i)
         return {'Rs': Rs, 'Rp': Rp, 'Ts': Ts, 'Tp': Tp}
 
     @staticmethod
