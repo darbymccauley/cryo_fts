@@ -80,7 +80,7 @@ class MirrorController:
         if self.data_store:
             df = pd.DataFrame(self.data_store)
             if 'position' in df.columns:
-                df['position_um'] = df['position'].apply(lambda p: p.to(u.um).value if p is not None else None)
+                df['position_mm'] = df['position'].apply(lambda p: p.to(u.mm).value if p is not None else None)
             df.to_csv(self._save_filename, index=False)
             print(f"Saved scan data to {self._save_filename}")
 
