@@ -1,0 +1,85 @@
+from cryo_fts.motor import MotorController
+from cryo_fts.lockin import LockinController
+from cryo_fts.encoder import EncoderController
+import numpy as np
+from datetime import date, datetime
+import time
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--res', help='resolution of steps in mm', type=float)
+args = parser.parse_args()
+
+RES = args.res
+
+def main():
+    lockin = LockinController()
+    encoder = EncoderController()
+    motor = MotorController(length_units='mm')
+
+    try:
+        lockin.init()
+        time.sleep(0.5)
+        encoder.init()
+        time.sleep(0.5)
+        motor.init()
+        time.sleep(0.5)
+        motor.home_axis()
+
+        # RES = 0.15  # [mm]
+        NSTEPS = int(motor.AXIS_MAX / RES) + 1
+        print(f'Total steps in run: {NSTEPS}')
+        NSAMPS = 50
+
+        data = []
+        positions = []
+
+        for n in range(NSTEPS):
+            pos = n * RES
+            try:
+                motor.move_absolute(pos)
+                time.sleep(0.1)  
+                
+                current_pos = encoder.get_count()
+                positions.append(current_pos)
+                
+                d = [lockin.get_x_y_r_theta() for _ in range(NSAMPS)]
+                data.extend(d)
+                
+                print(f'Count: {n + 1}/{NSTEPS} | Position: {current_pos:.2f} mm')
+                time.sleep(0.1) 
+
+            except Exception as e:
+                print(f'FAILURE OCCURRED at step {n}: {e}')
+                continue
+
+        if data:
+            data = np.array(data)
+            database = {
+                'Date': date.today().strftime("%Y-%m-%d"),
+                'RES_mm': RES,
+                'NINT': NSAMPS,
+                'NSTEPS': NSTEPS,
+                'X_V': data[:, 0],
+                'Y_V': data[:, 1],
+                'R_V': data[:, 2],
+                'THETA_deg': data[:, 3],
+                'ENCODER_POS_mm': positions,
+            }
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            np.savez(f'../scan_data/{timestamp}.npz', **database)
+            print('Data saved.')
+        else:
+            print('No data collected.')
+
+    except KeyboardInterrupt:
+        print('KeyboardInterrupt detected. Closing devices.')
+
+    finally:
+        lockin.close()
+        motor.close()
+        encoder.close()
+        print('Devices closed.')
+
+if __name__ == "__main__":
+    main()
