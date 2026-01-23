@@ -51,7 +51,7 @@ class LockinController:
         """Initialize the lock-in amplifier."""
         self.write(f'++addr {self.gpib_address}')
         self.write('++auto 1')
-        self.write('eos 3')
+        self.write('++eos 3')
         self.write('++eoi 1')
         self.write('++mode 1')
         self.write('OUTX 1')

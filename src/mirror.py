@@ -58,7 +58,7 @@ class MirrorController:
         else:
             self.motor.move_relative(position, length_unit)
 
-    def scan_and_collect(self, velocity, velocity_unit=None, sample_rate = 10, save_to_csv = None):
+    def scan_and_collect(self, velocity, velocity_unit=None, sample_rate=10, save_to_csv=None):
         """start a scan and save results to csv"""
         if self._scan_thread and self._scan_thread.is_alive():
             raise RuntimeError('Scan already in progress.')
@@ -66,7 +66,7 @@ class MirrorController:
         self.data_store = []
         if save_to_csv is None: #automatically save data with timestamped name if name not given
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            save_to_csv = f"../scan_data/{timestamp}.csv"
+            save_to_csv = f"../scan_data/{timestamp}.csv" # XXX dont like the hard-coding
         self._save_filename = save_to_csv
 
         self._scan_thread = threading.Thread(target=self._scan_worker, args=(velocity, velocity_unit, sample_rate), daemon=True)
@@ -85,7 +85,6 @@ class MirrorController:
             print(f"Saved scan data to {self._save_filename}")
 
     def _scan_worker(self, velocity, velocity_unit, sample_rate):
-        # adding lockin functionality
         try:
             self.encoder.start_transmission()
             self.motor.move_velocity(velocity, velocity_unit)
