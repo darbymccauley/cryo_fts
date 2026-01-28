@@ -88,27 +88,49 @@ class MirrorController:
         try:
             self.encoder.start_transmission()
             self.motor.move_velocity(velocity, velocity_unit)
-            # lock-in reads in background at higher rate than scan, at least 20 Hz
             lockin_rate = max(int(sample_rate * 2), 20)
             self.lockin.start_transmission(sample_rate=lockin_rate)
             period = 1 / sample_rate
 
+            last_pos = None
+            stationary_count = 0 
+            STATIONARY_THRESHOLD = 5
+            
             with open(self._save_filename, 'w') as f:
                 f.write("timestamp,position_mm,x,y,r,theta\n")
-
+                
+                iteration = 0
                 while not self._stop_scan.is_set():
-                    #encoder latest
+                    iteration += 1
+                 
                     enc_latest = self.encoder.get_latest()
                     t_enc = None
                     pos = None
+                    
                     if enc_latest:
                         t_enc, cnt = enc_latest
                         pos = (cnt - self.OFFSET) * self.RESOLUTION
-                        pos = pos.value
+                        pos_value = pos.value
+
+                        if pos_value >= self.motor.AXIS_MAX.value * 0.98: #if scan reaches the end, stop
+                            break
+                        
+                        if last_pos is not None: #if encoder stops moving for a while, stop
+                            pos_diff = abs(pos_value - last_pos)
+                            if pos_diff < 0.001:
+                                stationary_count += 1
+                                if stationary_count >= STATIONARY_THRESHOLD:
+                                    break
+                            else:
+                                stationary_count = 0                       
+                        last_pos = pos_value
+                        pos = pos_value
+                    else:
+                        pos = None
 
                     #lockin
                     lockin_data = self.lockin.get_closest_time(t_enc)
-                    
+
                     if lockin_data:
                         x = lockin_data['x']
                         y = lockin_data['y']
@@ -133,6 +155,3 @@ class MirrorController:
             self.motor.stop()
             self.encoder.stop_transmission()
             self.lockin.stop_transmission()
-
-
-    

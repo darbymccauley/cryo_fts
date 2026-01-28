@@ -13,10 +13,13 @@ CSV = str(args.csv_file) if args.csv_file is not None else None
 
 fts = MirrorController()
 fts.init()
-# AXIS_MAX = fts.motor.AXIS_MAX
-# fts.move_absolute(0, 'mm')
+print("Moving to start position")
+fts.move_absolute(0, 'mm')
+print(f"Scanning at velocity = {VEL} {UNITS}")
+fts.scan_and_collect(velocity=VEL, velocity_unit=UNITS, save_to_csv=CSV)
+while fts._scan_thread and fts._scan_thread.is_alive():
+    fts._scan_thread.join(timeout=0.5)
 
-# fts.scan_and_collect(velocity=VEL, velocity_unit=UNITS, save_to_csv=CSV)
-
-# if np.allclose(AXIS_MAX, fts.get_position(), rtol=1e-2):
-#     fts.stop_scan()
+fts.stop_scan()
+fts.close()
+print("Scan done")
