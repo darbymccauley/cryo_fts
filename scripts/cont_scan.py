@@ -1,10 +1,14 @@
-from cryo_fts.mirror import MirrorController
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src'))
+
+from mirror import MirrorController
 import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--velocity', help='Magnitude of scan velocity', default=None)
 parser.add_argument('--units', help='Units of scan velocity', default=None)
-parser.add_argument('--csv_file', help='Where to save collected data', required=True)
+parser.add_argument('--csv_file', help='Where to save collected data', default = None)
 
 args = parser.parse_args()
 VEL = float(args.velocity) if args.velocity is not None else None

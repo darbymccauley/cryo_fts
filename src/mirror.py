@@ -1,5 +1,7 @@
 # import encoder, motor, lockin
-from cryo_fts import encoder, motor, lockin
+from encoder import EncoderController
+from motor import MotorController
+from lockin import LockinController
 import astropy.units as u
 import threading
 import time 
@@ -10,9 +12,9 @@ RES = 0.244140625 * u.um
 
 class MirrorController:
     def __init__(self):
-        self.lockin = lockin.LockinController(gpib_address=8)
-        self.encoder = encoder.EncoderController()
-        self.motor = motor.MotorController()
+        self.lockin = LockinController(gpib_address=8)
+        self.encoder = EncoderController()
+        self.motor = MotorController()
         self.RESOLUTION = RES.to(self.motor.LENGTH_UNITS)
         self.OFFSET = None
         self._scan_thread = None
@@ -66,7 +68,7 @@ class MirrorController:
         self.data_store = []
         if save_to_csv is None: #automatically save data with timestamped name if name not given
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            save_to_csv = f"../scan_data/{timestamp}.csv" # XXX dont like the hard-coding
+            save_to_csv = f"data/scan_data/{timestamp}.csv" # XXX dont like the hard-coding
         self._save_filename = save_to_csv
 
         self._scan_thread = threading.Thread(target=self._scan_worker, args=(velocity, velocity_unit, sample_rate), daemon=True)
@@ -102,7 +104,7 @@ class MirrorController:
                 iteration = 0
                 while not self._stop_scan.is_set():
                     iteration += 1
-                 
+                    
                     enc_latest = self.encoder.get_latest()
                     t_enc = None
                     pos = None
@@ -112,7 +114,7 @@ class MirrorController:
                         pos = (cnt - self.OFFSET) * self.RESOLUTION
                         pos_value = pos.value
 
-                        if pos_value >= self.motor.AXIS_MAX.value * 0.98: #if scan reaches the end, stop
+                        if pos_value >= self.motor.AXIS_MAX * 0.98: #if scan reaches the end, stop
                             break
                         
                         if last_pos is not None: #if encoder stops moving for a while, stop
@@ -150,7 +152,6 @@ class MirrorController:
                     f.write(f"{t_enc},{pos},{x},{y},{r},{theta}\n")
                     f.flush()
                     time.sleep(period)
- 
         finally:
             self.motor.stop()
             self.encoder.stop_transmission()

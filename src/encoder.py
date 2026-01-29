@@ -171,12 +171,13 @@ class EncoderController:
         """
         Get the latest (timestamp, position) from the queue.
         """
+        ts, pos = None, None
         try:
             while True:
                 ts, pos = self.data_queue.get_nowait()
         except queue.Empty:
             pass
-        return (ts, pos) if 'ts' in locals() else None
+        return (ts, pos) if ts is not None else None
 
     def get_all(self):
         with self.buffer_lock:
