@@ -68,7 +68,7 @@ class MirrorController:
         self.data_store = []
         if save_to_csv is None: #automatically save data with timestamped name if name not given
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            save_to_csv = f"data/scan_data/{timestamp}.csv" # XXX dont like the hard-coding
+            save_to_csv = f"C:\Users\vnh2\Desktop\FTS\cryo_fts_data\scan_data{timestamp}.csv" # XXX dont like the hard-coding
         self._save_filename = save_to_csv
 
         self._scan_thread = threading.Thread(target=self._scan_worker, args=(velocity, velocity_unit, sample_rate), daemon=True)
