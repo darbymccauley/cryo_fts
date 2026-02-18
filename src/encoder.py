@@ -1,5 +1,6 @@
 import os
 import serial
+import serial.tools.list_ports
 import time
 import threading
 import queue
@@ -139,10 +140,10 @@ class EncoderController:
         while not self._stop_thread.is_set():
             try:
                 data = self.connection.read(dat_len)
+                t = time.time()
                 if len(data) == dat_len:
                     try:
                         pos = int(data.decode('ascii'))
-                        t = time.time()
                         self.current_position = pos
                         with self.buffer_lock:
                             self.data_buffer.append((t, pos))
