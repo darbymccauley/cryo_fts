@@ -140,8 +140,8 @@ class EncoderController:
         while not self._stop_thread.is_set():
             try:
                 data = self.connection.read(dat_len)
-                t = time.time()  # Capture Unix timestamp immediately after reading to minimize lag
                 if len(data) == dat_len:
+                    t = time.time()  # Capture Unix timestamp immediately after valid read to minimize lag
                     try:
                         pos = int(data.decode('ascii'))
                         self.current_position = pos
