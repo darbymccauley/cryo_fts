@@ -1,20 +1,21 @@
-# import encoder, motor, lockin
+from toptica.lasersdk.dlcpro.v2_2_0 import DLCpro, NetworkConnection
 from encoder import EncoderController
 from motor import MotorController
-# from lockin import LockinController
 import astropy.units as u
 import threading
 import time 
 import pandas as pd
 from datetime import datetime
+import numpy as np
 
 RES = 0.244140625 * u.um
 
-class MirrorController:
-    def __init__(self):
-        # self.lockin = LockinController(gpib_address=8)
-        self.encoder = EncoderController()
+class TopticaController: 
+    def __init__(self, ip_address = ''): #insert ip address
+        self.ip_address = ip_address
+        self.dlc = None
         self.motor = MotorController()
+        self.encoder = EncoderController()
         self.RESOLUTION = RES.to(self.motor.LENGTH_UNITS)
         self.OFFSET = None
         self._scan_thread = None
@@ -23,28 +24,55 @@ class MirrorController:
         self._save_filename = None
 
     def init(self):
-        # self.lockin.init()
+        self.dlc = DLCpro(NetworkConnection(self.ip_address))
+        print(f"Connected to Toptica at {self.ip_address}")
+
         self.encoder.init()
         self.motor.init()
         self.find_offset()
-        # self.encoder.start_transmission()
         return True
     
     def find_offset(self):
         self.motor.move_absolute(0)
         cnt0 = self.encoder.get_count()
         self.OFFSET = cnt0
-
+    
     def get_position(self):
         cnt = self.encoder.get_count()
         pos = (cnt - self.OFFSET) * self.RESOLUTION
         return pos
-    
+
     def close(self):
         self.stop_scan()
         self.encoder.close()
         self.motor.close()
-        # self.lockin.close()
+        self.dlc.close()
+
+    def emission_on(self):
+        self.dlc.laser_operation.emission.set(True)
+        print("Emission on")
+
+    def emission_off(self):
+        self.dlc.laser_operation.emission.set(False)
+        print("Emission off")
+    
+    def set_frequency(self, freq_ghz):
+        self.dlc.frequency.frequency_set.set(freq_ghz)
+    
+    def get_frequency(self):
+        return self.dlc.frequency.frequency_act.get()
+    
+    def setup_lockin(self, freq_hz, int_time_ms, amp_gain, phase_deg):
+        self.dlc.lockin.frequency.set(freq_hz)
+        self.dlc.lockin.integration_time.set(int_time_ms)
+        self.dlc.lockin.amplifier_gain.set(amp_gain)
+        self.dlc.lockin.phase.set(phase_deg)
+
+    def get_photocurrent(self):
+        return self.dlc.lockin.lock_in_value.get()
+    
+    def reset_lockin(self):
+        self.dlc.lockin.lock_in_reset()
 
     def move_absolute(self, position, length_unit=None, async_move=False):
         if async_move:
@@ -52,15 +80,8 @@ class MirrorController:
             t.start()
         else:
             self.motor.move_absolute(position, length_unit)
-
-    def move_relative(self, position, length_unit=None, async_move=False):
-        if async_move:
-            t = threading.Thread(target=self.motor.move_relative, args=(position, length_unit), daemon=True)
-            t.start()
-        else:
-            self.motor.move_relative(position, length_unit)
-
-    def scan_and_collect(self, velocity, velocity_unit=None, sample_rate=10, save_to_csv=None):
+    
+    def scan_and_collect(self, freq_ghz, velocity, velocity_unit = None, sample_rate = 10, lockin_freq_hz = 5000, lockin_int_time_ms = 100, amplifier_gain = 1e6, save_to_csv = None):
         """start a scan and save results to csv"""
         if self._scan_thread and self._scan_thread.is_alive():
             raise RuntimeError('Scan already in progress.')
@@ -71,7 +92,7 @@ class MirrorController:
             save_to_csv = f"C:/Users/vnh2/Desktop/FTS/cryo_fts_data/scan_data{timestamp}.csv" # XXX dont like the hard-coding
         self._save_filename = save_to_csv
 
-        self._scan_thread = threading.Thread(target=self._scan_worker, args=(velocity, velocity_unit, sample_rate), daemon=True)
+        self._scan_thread = threading.Thread(target=self._scan_worker, args=(freq_ghz, velocity, velocity_unit, sample_rate, lockin_freq_hz, lockin_int_time_ms, amplifier_gain), daemon=True)
         self._scan_thread.start()
 
     def stop_scan(self):
@@ -81,17 +102,21 @@ class MirrorController:
             self._scan_thread.join()
         if self.data_store:
             df = pd.DataFrame(self.data_store)
-            if 'position' in df.columns:
-                df['position_mm'] = df['position'].apply(lambda p: p.to(u.mm).value if p is not None else None)
             df.to_csv(self._save_filename, index=False)
             print(f"Saved scan data to {self._save_filename}")
 
-    def _scan_worker(self, velocity, velocity_unit, sample_rate):
+    def _scan_worker(self, freq_ghz, velocity, velocity_unit, sample_rate, lockin_freq_hz, lockin_int_time_ms, amplifier_gain):
         try:
+            #self.emission_on()
+            #time.sleep(1)
+
+            self.set_frequency(freq_ghz)
+            time.sleep(5) #give photomixers time to stabilize
+
+            self.setup_lockin(freq_hz= lockin_freq_hz, int_time_ms= lockin_int_time_ms, amp_gain= amplifier_gain, phase_deg=0)
+
             self.encoder.start_transmission()
             self.motor.move_velocity(velocity, velocity_unit)
-            # lockin_rate = max(int(sample_rate * 2), 20)
-            # self.lockin.start_transmission(sample_rate=lockin_rate)
             period = 1 / sample_rate
 
             last_pos = None
@@ -99,7 +124,7 @@ class MirrorController:
             STATIONARY_THRESHOLD = 5
             
             with open(self._save_filename, 'w') as f:
-                f.write("timestamp,position_mm,x,y,r,theta\n")
+                f.write("timestamp,position_mm,frequency_ghz,photocurrent_na\n")
                 
                 iteration = 0
                 while not self._stop_scan.is_set():
@@ -130,30 +155,22 @@ class MirrorController:
                     else:
                         pos = None
 
-                    #lockin
-                    # lockin_data = self.lockin.get_closest_time(t_enc)
-
-                    # if lockin_data:
-                    #     x = lockin_data['x']
-                    #     y = lockin_data['y']
-                    #     r = lockin_data['r']
-                    #     theta = lockin_data['theta']
-                    # else:
-                    #     x = y = r = theta = None
+                    #toptica lockin
+                    self.reset_lockin()
+                    time.sleep(lockin_int_time_ms/ 1000)
+                    photocurrent, valid = self.get_photocurrent()
+                    freq_act = self.get_frequency()
 
                     record = ({
                         'timestamp': t_enc,
                         'position_mm': pos,
-                        # 'x': x,
-                        # 'y': y,
-                        # 'r': r,
-                        # 'theta': theta
-                        })
+                        'freq_ghz': freq_act,
+                        'photocurrent_na': photocurrent})
                     self.data_store.append(record)
-                    f.write(f"{t_enc},{pos}\n") #,{x},{y},{r},{theta}\n")
+                    f.write(f"{t_enc},{pos},{freq_act},{photocurrent}\n")
                     f.flush()
                     time.sleep(period)
         finally:
             self.motor.stop()
             self.encoder.stop_transmission()
-            # self.lockin.stop_transmission()
+            #self.emission_off()
