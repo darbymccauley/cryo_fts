@@ -134,21 +134,22 @@ class EncoderController:
     def _read_loop(self):
         """
         Background reader for position and time data.
+        Captures Unix timestamp concurrently with encoder position reading.
         """
         dat_len = self.POS_LEN
         while not self._stop_thread.is_set():
             try:
                 data = self.connection.read(dat_len)
+                t = time.time()  # Capture Unix timestamp immediately after reading to minimize lag
                 if len(data) == dat_len:
                     try:
                         pos = int(data.decode('ascii'))
-                        t = time.time()
                         self.current_position = pos
                         with self.buffer_lock:
                             self.data_buffer.append((t, pos))
                             if len(self.data_buffer) > 1000:
                                 self.data_buffer.pop(0)
-                        self.data_queue.put((t, pos)) # store position with timestamp
+                        self.data_queue.put((t, pos)) # store position with Unix timestamp
                     except ValueError:
                         continue
             except Exception as e:
@@ -169,7 +170,11 @@ class EncoderController:
             
     def get_latest(self):
         """
-        Get the latest (timestamp, position) from the queue.
+        Get the latest (Unix timestamp, position) from the queue.
+        
+        Returns:
+            tuple: (timestamp, position) where timestamp is seconds since Unix epoch (float),
+                   or None if queue is empty.
         """
         ts, pos = None, None
         try:

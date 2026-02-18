@@ -99,18 +99,20 @@ class MirrorController:
             STATIONARY_THRESHOLD = 5
             
             with open(self._save_filename, 'w') as f:
+                # CSV header: timestamp is Unix time (seconds since epoch)
                 f.write("timestamp,position_mm,x,y,r,theta\n")
                 
                 iteration = 0
                 while not self._stop_scan.is_set():
                     iteration += 1
                     
+                    # Get latest encoder reading with concurrent Unix timestamp
                     enc_latest = self.encoder.get_latest()
                     t_enc = None
                     pos = None
                     
                     if enc_latest:
-                        t_enc, cnt = enc_latest
+                        t_enc, cnt = enc_latest  # t_enc is Unix timestamp (seconds since epoch)
                         pos = (cnt - self.OFFSET) * self.RESOLUTION
                         pos_value = pos.value
 
