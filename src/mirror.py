@@ -1,7 +1,6 @@
-# import encoder, motor, lockin
 from .encoder import EncoderController
 from .motor import MotorController
-# from lockin import LockinController
+# from .lockin import LockinController
 import astropy.units as u
 import threading
 import time 
