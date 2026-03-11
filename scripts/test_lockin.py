@@ -1,7 +1,7 @@
-from cryo_fts.lockin import LockInController
+from cryo_fts.lockin import LockinController
 import numpy as np
 
-lockin = LockInController()
+lockin = LockinController()
 lockin.init()
 
 NSTEPS = 10

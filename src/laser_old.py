@@ -1,6 +1,6 @@
 from toptica.lasersdk.dlcpro.v2_2_0 import DLCpro, NetworkConnection
-from encoder import EncoderController
-from motor import MotorController
+from .encoder import EncoderController
+from .motor import MotorController
 import astropy.units as u
 import threading
 import time 
