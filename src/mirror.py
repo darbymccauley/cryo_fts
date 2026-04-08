@@ -1,6 +1,6 @@
 from .encoder import EncoderController
 from .motor import MotorController
-# from .lockin import LockinController
+from .lockin import LockinController
 import astropy.units as u
 import threading
 import time 
@@ -11,7 +11,7 @@ RES = 0.244140625 * u.um
 
 class MirrorController:
     def __init__(self):
-        # self.lockin = LockinController(gpib_address=8)
+        self.lockin = LockinController(gpib_address=8)
         self.encoder = EncoderController()
         self.motor = MotorController()
         self.RESOLUTION = RES.to(self.motor.LENGTH_UNITS)
@@ -22,11 +22,11 @@ class MirrorController:
         self._save_filename = None
 
     def init(self):
-        # self.lockin.init()
+        self.lockin.init()
         self.encoder.init()
         self.motor.init()
         self.find_offset()
-        # self.encoder.start_transmission()
+        self.encoder.start_transmission()
         return True
     
     def find_offset(self):
@@ -43,7 +43,7 @@ class MirrorController:
         self.stop_scan()
         self.encoder.close()
         self.motor.close()
-        # self.lockin.close()
+        self.lockin.close()
 
     def move_absolute(self, position, length_unit=None, async_move=False):
         if async_move:
@@ -89,8 +89,8 @@ class MirrorController:
         try:
             self.encoder.start_transmission()
             self.motor.move_velocity(velocity, velocity_unit)
-            # lockin_rate = max(int(sample_rate * 2), 20)
-            # self.lockin.start_transmission(sample_rate=lockin_rate)
+            lockin_rate = max(int(sample_rate * 2), 20)
+            self.lockin.start_transmission(sample_rate=lockin_rate)
             period = 1 / sample_rate
 
             last_pos = None
@@ -130,29 +130,29 @@ class MirrorController:
                         pos = None
 
                     #lockin
-                    # lockin_data = self.lockin.get_closest_time(t_enc)
+                    lockin_data = self.lockin.get_closest_time(t_enc)
 
-                    # if lockin_data:
-                    #     x = lockin_data['x']
-                    #     y = lockin_data['y']
-                    #     r = lockin_data['r']
-                    #     theta = lockin_data['theta']
-                    # else:
-                    #     x = y = r = theta = None
+                    if lockin_data:
+                        x = lockin_data['x']
+                        y = lockin_data['y']
+                        r = lockin_data['r']
+                        theta = lockin_data['theta']
+                    else:
+                        x = y = r = theta = None
 
                     record = ({
                         'timestamp': t_enc,
                         'position_mm': pos,
-                        # 'x': x,
-                        # 'y': y,
-                        # 'r': r,
-                        # 'theta': theta
+                        'x': x,
+                        'y': y,
+                        'r': r,
+                        'theta': theta
                         })
                     self.data_store.append(record)
-                    f.write(f"{t_enc},{pos}\n") #,{x},{y},{r},{theta}\n")
+                    f.write(f"{t_enc},{pos},{x},{y},{r},{theta}\n")
                     f.flush()
                     time.sleep(period)
         finally:
             self.motor.stop()
             self.encoder.stop_transmission()
-            # self.lockin.stop_transmission()
+            self.lockin.stop_transmission()
