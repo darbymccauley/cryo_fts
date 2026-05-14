@@ -1,10 +1,5 @@
-import sys
-import os
 import argparse
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src'))
-from mirror import MirrorController
-from encoder import EncoderController
-from motor import MotorController
+from cryo_fts.mirror import MirrorController
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--velocity', help='Magnitude of scan velocity', default=None)

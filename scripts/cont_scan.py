@@ -1,8 +1,7 @@
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src'))
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
-from mirror import MirrorController
+from src.mirror import MirrorController
 import argparse
 
 parser = argparse.ArgumentParser()
