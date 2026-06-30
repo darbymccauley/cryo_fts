@@ -18,6 +18,7 @@ class EncoderController:
         self.device = None
         self.connection = None
         self.transmitting = False
+        self.TRANMISSION_RATE = 1e-5 # seconds (10 us; 100 kHz)
         self.current_position = None
         self.data_queue = queue.Queue()
         self._reading_thread = None
