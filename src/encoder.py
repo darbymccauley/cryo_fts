@@ -24,6 +24,7 @@ class EncoderController:
         self._reading_thread = None
         self._stop_thread = threading.Event()
         self.POS_LEN = 9 # bit-length of position data
+        self.ENC_RES = 0.000244 # mm
 
         ports = [p.device for p in serial.tools.list_ports.comports()]
         for port in ports:
@@ -183,4 +184,6 @@ class EncoderController:
 
     def get_all(self):
         with self.buffer_lock:
-            return list(self.data_buffer)
+            data = list(self.data_buffer)
+            self.data_buffer.clear()
+            return data

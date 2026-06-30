@@ -1,6 +1,6 @@
 from .encoder import EncoderController
 from .motor import MotorController
-from .lockin import LockinController
+# from .lockin import LockinController
 import astropy.units as u
 import threading
 import time 
@@ -11,7 +11,7 @@ RES = 0.244140625 * u.um
 
 class MirrorController:
     def __init__(self):
-        self.lockin = LockinController(gpib_address=8)
+        # self.lockin = LockinController(gpib_address=8)
         self.encoder = EncoderController()
         self.motor = MotorController()
         self.RESOLUTION = RES.to(self.motor.LENGTH_UNITS)
@@ -22,7 +22,7 @@ class MirrorController:
         self._save_filename = None
 
     def init(self):
-        self.lockin.init()
+        # self.lockin.init()
         self.encoder.init()
         self.motor.init()
         self.find_offset()
@@ -43,7 +43,7 @@ class MirrorController:
         self.stop_scan()
         self.encoder.close()
         self.motor.close()
-        self.lockin.close()
+        # self.lockin.close()
 
     def move_absolute(self, position, length_unit=None, async_move=False):
         if async_move:
@@ -59,7 +59,7 @@ class MirrorController:
         else:
             self.motor.move_relative(position, length_unit)
 
-    def scan_and_collect(self, velocity, velocity_unit=None, sample_rate=10, save_to_csv=None):
+    def scan_and_collect(self, velocity, velocity_unit=None, poll_interval=0.001, save_to_csv=None):
         """start a scan and save results to csv"""
         if self._scan_thread and self._scan_thread.is_alive():
             raise RuntimeError('Scan already in progress.')
@@ -70,7 +70,7 @@ class MirrorController:
             save_to_csv = f"C:/Users/vnh2/Desktop/FTS/cryo_fts_data/scan_data{timestamp}.csv" # XXX dont like the hard-coding
         self._save_filename = save_to_csv
 
-        self._scan_thread = threading.Thread(target=self._scan_worker, args=(velocity, velocity_unit, sample_rate), daemon=True)
+        self._scan_thread = threading.Thread(target=self._scan_worker, args=(velocity, velocity_unit, poll_interval), daemon=True)
         self._scan_thread.start()
 
     def stop_scan(self):
@@ -85,74 +85,67 @@ class MirrorController:
             df.to_csv(self._save_filename, index=False)
             print(f"Saved scan data to {self._save_filename}")
 
-    def _scan_worker(self, velocity, velocity_unit, sample_rate):
+    def _scan_worker(self, velocity, velocity_unit, poll_interval=None):
         try:
+            if poll_interval is None:
+                poll_interval = self.encoder.TRANSMISSION_RATE
             self.encoder.start_transmission()
             self.motor.move_velocity(velocity, velocity_unit)
-            lockin_rate = max(int(sample_rate * 2), 20)
-            self.lockin.start_transmission(sample_rate=lockin_rate)
-            period = 1 / sample_rate
+            # lockin_rate = max(int(sample_rate * 2), 20)
+            # self.lockin.start_transmission(sample_rate=lockin_rate)
+            # period = 1 / sample_rate
 
             last_pos = None
-            stationary_count = 0 
-            STATIONARY_THRESHOLD = 5
+            stationary_start = None
+            STATIONARY_TIMEOUT = 0.5
+            STATIONARY_TOLERANCE = self.encoder.ENC_RES * 1.5
             
             with open(self._save_filename, 'w') as f:
-                f.write("timestamp,position_mm,x,y,r,theta\n")
-                
-                iteration = 0
+                f.write("timestamp,position_mm\n") #,x,y,r,theta\n")
                 while not self._stop_scan.is_set():
-                    iteration += 1
-                    
-                    enc_latest = self.encoder.get_latest()
-                    t_enc = None
-                    pos = None
-                    
-                    if enc_latest:
-                        t_enc, cnt = enc_latest
+                    samples = self.encoder.get_all()
+                    if not samples:
+                        time.sleep(poll_interval)
+                        continue
+
+                    should_stop = False
+                    for t_enc, cnt in samples:
                         pos = (cnt - self.OFFSET) * self.RESOLUTION
                         pos_value = pos.value
 
                         if pos_value >= self.motor.AXIS_MAX * 0.98: #if scan reaches the end, stop
-                            break
+                            should_stop = True
                         
                         if last_pos is not None: #if encoder stops moving for a while, stop
                             pos_diff = abs(pos_value - last_pos)
-                            if pos_diff < 0.001:
-                                stationary_count += 1
-                                if stationary_count >= STATIONARY_THRESHOLD:
-                                    break
+                            if pos_diff <= STATIONARY_TOLERANCE:
+                                if stationary_start is None:
+                                    stationary_start = t_enc
+                                elif t_enc - stationary_start >= STATIONARY_TIMEOUT:
+                                    should_stop = True
                             else:
-                                stationary_count = 0                       
+                                stationary_start = None
                         last_pos = pos_value
-                        pos = pos_value
-                    else:
-                        pos = None
 
-                    #lockin
-                    lockin_data = self.lockin.get_closest_time(t_enc)
+                        record = ({
+                            'timestamp': t_enc,
+                            'position_mm': pos_value,
+                            # 'x': x,
+                            # 'y': y,
+                            # 'r': r,
+                            # 'theta': theta
+                            })
+                        self.data_store.append(record)
+                        f.write(f"{t_enc},{pos_value}\n") #,{x},{y},{r},{theta}\n")
 
-                    if lockin_data:
-                        x = lockin_data['x']
-                        y = lockin_data['y']
-                        r = lockin_data['r']
-                        theta = lockin_data['theta']
-                    else:
-                        x = y = r = theta = None
+                        if should_stop:
+                            break
 
-                    record = ({
-                        'timestamp': t_enc,
-                        'position_mm': pos,
-                        'x': x,
-                        'y': y,
-                        'r': r,
-                        'theta': theta
-                        })
-                    self.data_store.append(record)
-                    f.write(f"{t_enc},{pos},{x},{y},{r},{theta}\n")
                     f.flush()
-                    time.sleep(period)
+                    if should_stop:
+                        break
+                    time.sleep(poll_interval)
         finally:
             self.motor.stop()
             self.encoder.stop_transmission()
-            self.lockin.stop_transmission()
+            # self.lockin.stop_transmission()

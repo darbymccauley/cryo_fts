@@ -5,7 +5,7 @@ class TopticaController:
     def __init__(self, port='COM6', verbose=False):
         self.port = port
         self.verbose = verbose
-        self.client = client(SerialConnection(port))
+        self.client = Client(SerialConnection(port))
         self.client.__enter__() # ensure connection to Toptica via USB connection established
         self.dlc = self.client.get('general:system-type')
         self.user_level = self.client.get('ul')

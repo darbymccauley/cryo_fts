@@ -16,7 +16,7 @@ fts.init()
 print("Moving to start position")
 fts.move_absolute(0, 'mm')
 print(f"Scanning at velocity = {VEL} {UNITS}")
-fts.scan_and_collect(velocity=VEL, velocity_unit=UNITS, save_to_csv=CSV)
+fts.scan_and_collect(velocity=VEL, velocity_unit=UNITS, poll_interval=0.001, save_to_csv=CSV)
 while fts._scan_thread and fts._scan_thread.is_alive():
     fts._scan_thread.join(timeout=0.5)
 

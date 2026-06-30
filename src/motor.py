@@ -1,7 +1,7 @@
-import os
 from zaber_motion.ascii import Connection
 import astropy.units as u
 import serial
+import serial.tools.list_ports
 
 
 class MotorController:
